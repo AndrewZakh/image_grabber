@@ -8,7 +8,7 @@ import aiohttp
 import aiofiles
 
 class ImageGrabber():
-    def __init__(self, url, path='./images', auth=None):
+    def __init__(self, url, path, auth=None):
         logging.basicConfig(level=logging.DEBUG,
                     format='%(asctime)s %(name)s - %(levelname)s - %(message)s',
                     datefmt='%Y-%m-%d %H:%M:%S',
@@ -16,13 +16,22 @@ class ImageGrabber():
                     filemode='a')
         self.logger = logging.getLogger('image_grabber')
         self.basic_auth = auth
-        self.aio_auth = aiohttp.BasicAuth(login = self.basic_auth[0], 
-                                          password = self.basic_auth[1])
+        if self.basic_auth:
+            self.aio_auth = aiohttp.BasicAuth(login = self.basic_auth[0], 
+                                              password = self.basic_auth[1])
+        else:
+            self.aio_auth = None
         self.url = url
         self.path = path
         self.addr_base = f'{urlparse(self.url).scheme}://'\
                          f'{urlparse(self.url).netloc}'
 
+    def main(self):
+        # asyncio.run(ig.get_url_content())
+        loop = asyncio.get_event_loop()
+        loop.run_until_complete(ig.get_url_content())
+        ig.parse_content()
+        asyncio.run(self.download_all())
 
     def not_full_link(self, img_addr):
         '''Dirty workaround'''
@@ -52,14 +61,15 @@ class ImageGrabber():
                 self.logger.debug(f'Adding {match.group(1)}')
                 img_list.append(match.group(1))
         self.logger.info(f'Found {len(img_list)} objects')
+        self.logger.debug(f'Images found: {img_list}')
         self.img_list = img_list
 
     async def download(self, img, session):
         '''Async downloads.'''
-        self.logger.info(f'downloading: {img}')
+        self.logger.info(f'Downloading: {img}')
         filename = img.split('/')[-1:][0]
         self.logger.info(f'Saving file: {filename}')
-        if not_full_link(img):
+        if self.not_full_link(img):
             if img[0] != '/':
                 img = f'/{img}'
             url = f'{self.addr_base}{img}'
@@ -67,30 +77,20 @@ class ImageGrabber():
         else:
             url = img
         self.logger.debug(f'Downloading: {url}')
-        pathlib.Path(path).mkdir(parents=True, exist_ok=True)
-        full_path = pathlib.PurePath(path, filename)
+        
+        full_path = pathlib.PurePath(self.path, filename)
         async with session.get(url) as response:
             async with aiofiles.open(full_path, "wb") as f:
                 await f.write(await response.read())
 
-    async def download_all(img_list, addr, path, auth=None):
+    async def download_all(self):
         '''Wrapper for async downloads.'''
-        if auth!=None:
-            basic_auth = aiohttp.BasicAuth(login=auth[0], password=auth[0], encoding='utf-8')
-            aiohttp_session = aiohttp.ClientSession(auth=basic_auth)
-        else:
-            aiohttp_session = aiohttp.ClientSession()
-        async with aiohttp_session as session:
+        pathlib.Path(self.path).mkdir(parents=True, exist_ok=True)
+        async with aiohttp.ClientSession(auth=self.aio_auth) as session:
             await asyncio.gather(
-                *[download(img, addr, path, session, auth) for img in img_list]
+                *[self.download(img, session) for img in self.img_list]
             )
 
-    def main(self):
-        # asyncio.run(ig.get_url_content())
-        loop = asyncio.get_event_loop()
-        loop.run_until_complete(ig.get_url_content())
-        ig.parse_content()
-        asyncio.run(download_all())
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Download PNG images from your URL.')
@@ -103,8 +103,5 @@ if __name__ == '__main__':
         ba = (args.username, args.password)
     else:
         ba = None
-    ig = ImageGrabber(args.url, path=args.path, auth=ba)
+    ig = ImageGrabber(args.url, args.path, auth=ba)
     ig.main()
-    
-    
-    
