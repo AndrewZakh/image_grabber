@@ -13,15 +13,16 @@ class ImageGrabber():
     '''Main class.'''
     def __init__(self, url, path, auth=None):
         logging.basicConfig(level=logging.DEBUG,
-                    format='%(asctime)s %(name)s - %(levelname)s - %(message)s',
-                    datefmt='%Y-%m-%d %H:%M:%S',
-                    filename='image_grabber.log',
-                    filemode='a')
+                            format='%(asctime)s %(name)s'
+                                   ' - %(levelname)s - %(message)s',
+                            datefmt='%Y-%m-%d %H:%M:%S',
+                            filename='image_grabber.log',
+                            filemode='a')
         self.logger = logging.getLogger('image_grabber')
         self.basic_auth = auth
         if self.basic_auth:
-            self.aio_auth = aiohttp.BasicAuth(login = self.basic_auth[0], 
-                                              password = self.basic_auth[1])
+            self.aio_auth = aiohttp.BasicAuth(login=self.basic_auth[0],
+                                              password=self.basic_auth[1])
         else:
             self.aio_auth = None
         self.url = url
@@ -30,7 +31,7 @@ class ImageGrabber():
                          f'{urlparse(self.url).netloc}'
 
     def main(self):
-        # asyncio.run(ig.get_url_content())
+        '''Main loop function.'''
         loop = asyncio.get_event_loop()
         loop.run_until_complete(ig.get_url_content())
         ig.parse_content()
@@ -44,22 +45,20 @@ class ImageGrabber():
             return False
 
     async def get_url_content(self):
-            '''Gets the html content from the url.'''
-            if self.basic_auth:
-                aio_auth = aiohttp.BasicAuth(login = self.basic_auth[0], 
-                                             password = self.basic_auth[1])
-            async with aiohttp.ClientSession(auth=self.aio_auth) as session:
-                async with session.get(self.url) as response:
-                    html = await response.text()
-                    self.body = html
-                    self.logger.debug(f'{self.body}')
+        '''Gets the html content from the url.'''
+        async with aiohttp.ClientSession(auth=self.aio_auth) as session:
+            async with session.get(self.url) as response:
+                html = await response.text()
+                self.body = html
+                self.logger.debug(f'{self.body}')
 
     def parse_content(self):
         '''Parses the page to find PNG images using regex.'''
-        rgx = re.compile(r'\<img[^>]{1,}src=[\"\']{1}([^\'\"]+.png)', re.MULTILINE |re.IGNORECASE)
-        matches = rgx.finditer(self.body)
         # This code could be refactored with smth like BeautifulSoup library
         # but I was willing to show I can write regular expressions.
+        rgx = re.compile(r'\<img[^>]{1,}src=[\"\']{1}([^\'\"]+.png)',
+                         re.MULTILINE | re.IGNORECASE)
+        matches = rgx.finditer(self.body)
         img_list = []
         for matchNum, match in enumerate(matches, start=1):
             if match.group(1) not in img_list:
@@ -80,9 +79,7 @@ class ImageGrabber():
             self.logger.debug(f'Downloading: {url}')
         else:
             url = img
-        # -- should be replaced
         self.logger.debug(f'Downloading: {url}')
-        
         full_path = pathlib.PurePath(self.path, filename)
         async with session.get(url) as response:
             async with aiofiles.open(full_path, "wb") as f:
@@ -98,7 +95,8 @@ class ImageGrabber():
 
 
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser(description='Download PNG images from your URL.')
+    parser = argparse.ArgumentParser(
+        description='Download PNG images from your URL.')
     parser.add_argument('--url', help='URL to process.')
     parser.add_argument('--path', help='Path to store files.')
     parser.add_argument('--username', help='Username in case of Basic Auth.')
