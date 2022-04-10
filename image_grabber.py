@@ -1,4 +1,5 @@
-from urllib.parse import urlparse, urljoin
+from urllib.parse import urlparse
+from urllib.parse import urljoin
 import re
 import argparse
 import logging
@@ -7,7 +8,9 @@ import asyncio
 import aiohttp
 import aiofiles
 
+
 class ImageGrabber():
+    '''Main class.'''
     def __init__(self, url, path, auth=None):
         logging.basicConfig(level=logging.DEBUG,
                     format='%(asctime)s %(name)s - %(levelname)s - %(message)s',
@@ -34,7 +37,7 @@ class ImageGrabber():
         asyncio.run(self.download_all())
 
     def not_full_link(self, img_addr):
-        '''Dirty workaround'''
+        '''This should be replaced with a better analyzer.'''
         if img_addr.find('://') == -1:
             return True
         else:
@@ -45,7 +48,7 @@ class ImageGrabber():
             if self.basic_auth:
                 aio_auth = aiohttp.BasicAuth(login = self.basic_auth[0], 
                                              password = self.basic_auth[1])
-            async with aiohttp.ClientSession(auth=aio_auth) as session:
+            async with aiohttp.ClientSession(auth=self.aio_auth) as session:
                 async with session.get(self.url) as response:
                     html = await response.text()
                     self.body = html
@@ -55,6 +58,8 @@ class ImageGrabber():
         '''Parses the page to find PNG images using regex.'''
         rgx = re.compile(r'\<img[^>]{1,}src=[\"\']{1}([^\'\"]+.png)', re.MULTILINE |re.IGNORECASE)
         matches = rgx.finditer(self.body)
+        # This code could be refactored with smth like BeautifulSoup library
+        # but I was willing to show I can write regular expressions.
         img_list = []
         for matchNum, match in enumerate(matches, start=1):
             if match.group(1) not in img_list:
@@ -69,13 +74,13 @@ class ImageGrabber():
         self.logger.info(f'Downloading: {img}')
         filename = img.split('/')[-1:][0]
         self.logger.info(f'Saving file: {filename}')
+        # Quickfix, should be replaced with a better analyzer
         if self.not_full_link(img):
-            if img[0] != '/':
-                img = f'/{img}'
-            url = f'{self.addr_base}{img}'
+            url = urljoin(self.addr_base, img)
             self.logger.debug(f'Downloading: {url}')
         else:
             url = img
+        # -- should be replaced
         self.logger.debug(f'Downloading: {url}')
         
         full_path = pathlib.PurePath(self.path, filename)
